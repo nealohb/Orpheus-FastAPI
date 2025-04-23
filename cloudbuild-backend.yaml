@@ -1,0 +1,13 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  # Specify machineType within the step that needs the GPU
+  machineType: 'N1_HIGHCPU_8_GPU_1'
+  args: [
+            'build',
+            '-t', 'us-central1-docker.pkg.dev/gen-lang-client-0479297407/orpheus-repo/orpheus-backend:latest',
+            '-f', 'Dockerfile.backend', # Specify the backend Dockerfile
+            '.'
+        ]
+images:
+- 'us-central1-docker.pkg.dev/gen-lang-client-0479297407/orpheus-repo/orpheus-backend:latest'
+# Remove global options block as machineType is now per-step

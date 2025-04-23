@@ -1,0 +1,56 @@
+# Use an official NVIDIA CUDA base image
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+# Set environment variables to ensure UTF-8 encoding and non-interactive installs
+ENV LANG C.UTF-8
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3-venv \
+    git \
+    build-essential \
+    cmake \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user and group
+RUN groupadd --gid 1001 appgroup && \
+    useradd --uid 1001 --gid 1001 -m appuser
+
+# Create app directory and set permissions
+RUN mkdir /app && chown appuser:appgroup /app
+WORKDIR /app
+USER appuser
+
+# Create and activate virtual environment
+RUN python3 -m venv /app/venv
+ENV PATH="/app/venv/bin:$PATH"
+
+# Set simplified CMake arguments for llama-cpp-python build
+# Only explicitly enable CUDA, let CMake detect other paths.
+ENV CMAKE_ARGS="-DGGML_CUDA=on"
+
+# Install llama-cpp-python with CUDA support
+# Forcing build from source by removing --extra-index-url
+# Explicitly add the path where libcuda.so.1 was found to LD_LIBRARY_PATH for the linker
+RUN export LD_LIBRARY_PATH="/usr/local/cuda-12.4/compat/:${LD_LIBRARY_PATH}" && \
+    pip install --no-cache-dir wheel setuptools && \
+    pip install --no-cache-dir "llama-cpp-python[server]"
+
+# Expose the port the server will listen on
+EXPOSE 1234
+
+# Command to run the llama.cpp server
+# Loads the model from the GCS mount point /models
+# Listens on all interfaces on port 1234
+# Offloads all possible layers to the GPU
+# Sets context size as recommended in the project README
+CMD ["python3", "-m", "llama_cpp.server", \
+     "--model", "/models/Orpheus-3b-FT-Q8_0.gguf", \
+     "--host", "0.0.0.0", \
+     "--port", "1234", \
+     "--n_gpu_layers", "999", \
+     "--n_ctx", "8192"]

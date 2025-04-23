@@ -6,8 +6,9 @@ import os
 import time
 import asyncio
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Annotated # Added Annotated
 from dotenv import load_dotenv
+from fastapi import Header # Added Header
 
 # Function to ensure .env file exists
 def ensure_env_file_exists():
@@ -43,6 +44,22 @@ ensure_env_file_exists()
 
 # Load environment variables from .env file
 load_dotenv(override=True)
+
+# --- API Key Authentication ---
+API_KEY_SECRET = os.environ.get("API_KEY_SECRET") # Read key from env var set by Secret Manager
+
+async def verify_api_key(x_api_key: Annotated[str | None, Header()] = None):
+    """Dependency function to verify the X-API-Key header."""
+    if not API_KEY_SECRET:
+        # Allow access if the secret is not configured on the server (e.g., local dev)
+        # Consider adding stricter behavior if needed.
+        print("⚠️ API_KEY_SECRET not set, allowing request without authentication.")
+        return
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="X-API-Key header missing")
+    if x_api_key != API_KEY_SECRET:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+# --- End API Key Authentication ---
 
 from fastapi import FastAPI, Request, Form, HTTPException, Depends
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -89,12 +106,12 @@ class APIResponse(BaseModel):
     output_file: str
     generation_time: float
 
-# OpenAI-compatible API endpoint
-@app.post("/v1/audio/speech")
+# OpenAI-compatible API endpoint - Apply API Key Dependency
+@app.post("/v1/audio/speech", dependencies=[Depends(verify_api_key)])
 async def create_speech_api(request: SpeechRequest):
     """
     Generate speech from text using the Orpheus TTS model.
-    Compatible with OpenAI's /v1/audio/speech endpoint.
+    Compatible with OpenAI's /v1/audio/speech endpoint. Requires API Key.
     
     For longer texts (>1000 characters), batched generation is used
     to improve reliability and avoid truncation issues.
