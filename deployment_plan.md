@@ -104,17 +104,20 @@
 
 **Phase 3: Frontend FastAPI Service (`orpheus-frontend`)**
 
-11. **Modify `app.py` for Auth:**
-    *   Implement FastAPI dependency to read API key from `API_KEY_SECRET` env var (populated by Secret Manager).
-    *   Check `X-API-Key` header against the secret key.
-    *   Reject requests with 401 if key is missing/invalid.
-12. **Build & Push Frontend Image:** (Using `Dockerfile.cpu`)
-    ```bash
-    gcloud builds submit . \
-      --tag us-central1-docker.pkg.dev/gen-lang-client-0479297407/orpheus-repo/orpheus-frontend:latest \
-      --project=gen-lang-client-0479297407 \
-      --file Dockerfile.cpu
-    ```
+11. **Modify `app.py` / `tts_engine/inference.py` for Auth:**
+    *   Implement FastAPI dependency in `app.py` to read API key from `API_KEY_SECRET` env var (populated by Secret Manager).
+    *   Check `X-API-Key` header against the secret key. Reject requests with 401 if key is missing/invalid.
+    *   Modify `tts_engine/inference.py` to fetch OIDC token for backend IAP authentication.
+12. **Build & Push Frontend Image (Locally):** (Using `Dockerfile.cpu`)
+    *   Ensure Docker credential helper for Artifact Registry is configured (see Phase 2, Step 8).
+    *   Build the image locally:
+        ```bash
+        docker build -t us-central1-docker.pkg.dev/gen-lang-client-0479297407/orpheus-repo/orpheus-frontend:latest -f Dockerfile.cpu .
+        ```
+    *   Push the image to Artifact Registry:
+        ```bash
+        docker push us-central1-docker.pkg.dev/gen-lang-client-0479297407/orpheus-repo/orpheus-frontend:latest
+        ```
 13. **Deploy Frontend Service:**
     ```bash
     # Set BACKEND_URL from step 10

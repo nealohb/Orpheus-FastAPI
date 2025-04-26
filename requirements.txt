@@ -29,3 +29,5 @@ psutil==5.9.0
 # pydub==0.25.1
 # For better sentence splitting (potential future improvement)
 # nltk==3.8.1
+
+google-auth

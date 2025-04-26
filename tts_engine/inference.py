@@ -13,6 +13,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Optional, Generator, Union, Tuple
 from dotenv import load_dotenv
+import google.auth.transport.requests
+import google.oauth2.id_token
 
 # Helper to detect if running in Uvicorn's reloader
 def is_reloader_process():
@@ -84,6 +86,12 @@ if missing_settings:
 API_URL = os.environ.get("ORPHEUS_API_URL")
 if not API_URL:
     print("WARNING: ORPHEUS_API_URL not set. API calls will fail until configured.")
+
+# Audience for IAP OIDC token should be the base URL of the backend service
+# IMPORTANT: Ensure this matches the actual backend service URL
+BACKEND_AUDIENCE = "https://orpheus-backend-khnhqnvsra-uc.a.run.app"
+print(f"  BACKEND_AUDIENCE (for IAP): {BACKEND_AUDIENCE}")
+
 
 HEADERS = {
     "Content-Type": "application/json"
@@ -274,15 +282,35 @@ def generate_tokens_from_api(prompt: str, voice: str = DEFAULT_VOICE, temperatur
     
     while retry_count < max_retries:
         try:
-            # Make the API request with streaming and timeout
+            # --- Fetch OIDC token for IAP ---
+            request_headers = HEADERS.copy() # Start with base headers
+            if BACKEND_AUDIENCE:
+                try:
+                    # Attempt to fetch the token only if running on GCP/Cloud Run
+                    # Check for metadata server availability (simple check)
+                    if os.environ.get("K_SERVICE"): # K_SERVICE is typically set in Cloud Run
+                        print("Attempting to fetch IAP token...")
+                        auth_req = google.auth.transport.requests.Request()
+                        id_token = google.oauth2.id_token.fetch_id_token(auth_req, BACKEND_AUDIENCE)
+                        request_headers["Authorization"] = f"Bearer {id_token}"
+                        print("Successfully fetched IAP token and added Authorization header.")
+                    else:
+                        print("Not running in Cloud Run (K_SERVICE not set), skipping IAP token fetch.")
+                except Exception as e:
+                    print(f"WARNING: Failed to fetch IAP token: {e}. Proceeding without Authorization header.")
+            else:
+                 print("WARNING: BACKEND_AUDIENCE not set. Cannot fetch IAP token.")
+            # --- End Fetch OIDC token ---
+
+            # Make the API request with streaming, timeout, and potentially auth header
             response = session.post(
-                API_URL, 
-                headers=HEADERS, 
-                json=payload, 
+                API_URL,
+                headers=request_headers, # Use potentially modified headers
+                json=payload,
                 stream=True,
                 timeout=REQUEST_TIMEOUT
             )
-            
+
             if response.status_code != 200:
                 print(f"Error: API request failed with status code {response.status_code}")
                 print(f"Error details: {response.text}")
