@@ -29,8 +29,20 @@ RUN python3 -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
 # Install CPU-only PyTorch and other dependencies
+# Install CPU-only PyTorch, huggingface_hub, and other dependencies
 RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    pip3 install --no-cache-dir huggingface_hub && \
     pip3 install --no-cache-dir -r requirements.txt
+
+# --- Add Model Download Steps ---
+# Define and create cache directory, set ownership
+ENV HF_HOME=/app/models
+ENV HF_HUB_CACHE=/app/models
+ENV TRANSFORMERS_CACHE=/app/models
+RUN mkdir -p $HF_HOME && chown appuser:appuser $HF_HOME
+# Download the specific model during the build process
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='hubertsiuzdak/snac_24khz', cache_dir='$HF_HOME', local_dir_use_symlinks=False)"
+# --- End Model Download Steps ---
 
 # Copy project files
 COPY --chown=appuser:appuser . .
